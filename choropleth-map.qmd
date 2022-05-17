@@ -1,0 +1,186 @@
+---
+title: "专题地图及其应用"
+subtitle: "草稿"
+date: '2022-05-02'
+author: "黄湘云"
+abstract: | 
+  在美国和日本的国家统计局官网，地区分布图用于展示各类指标。衡量一个部门、一个业务、一个公司、一个行业，乃至一个国家都有一套金字塔式的指标体系，而国家每年发布的统计年鉴就包含一套衡量经济和社会发展情况的指标体系，涵盖人口、土地、生产、消费等等专题，省、市、区县以及自治区、州、县等各级地方统计局每年也会发布一份地方统计年鉴。
+format:
+  pdf:
+    documentclass: ctexart
+    classoption: [UTF8]
+    toc: true
+    lang: zh
+    number-sections: true
+    colorlinks: true
+    link-citations: true
+    highlight-style: github
+    lof: true
+    lot: true
+    keep-tex: true
+    geometry: margin=1in
+    crossref:
+      chapters: true
+bibliography: refer.bib
+editor: source
+---
+
+
+{{< pagebreak >}}
+
+::: {.callout-important}
+本文引用的所有信息均为公开信息，仅代表作者本人观点，与就职单位无关。
+:::
+
+
+```{r setup}
+#| echo: false
+knitr::opts_chunk$set(
+  comment = "#",
+  message = FALSE,
+    cache = TRUE,
+     echo = TRUE,
+ collapse = TRUE
+)
+```
+
+
+## 本文概览
+
+
+空间地理可视化的内容非常丰富，涉及空间坐标投影、操作空间数据、选择图形种类、选择绘图工具等。就图形种类而言，对标鼎鼎大名的收费 BI（Business Intelligence） 工具[Tableau](https://www.tableau.com/zh-cn/solutions/maps)，至少包含最常见的面量图、比例符号地图、点分布图、流线图、蜘蛛图（飞线图）、热图。其中的「面量图」通常又叫专题地图、地区分布图、统计地图，英文一般为[Choropleth map](https://en.wikipedia.org/wiki/Choropleth_map)，典型样例是基于统计年鉴的各类专题数据的地理可视化，国家地理信息公共服务平台提供了[专题图层服务](https://zhfw.tianditu.gov.cn/)，可以快速地查看各个统计指标。在美国和日本的国家统计局官网，地区分布图用于展示各类指标[@Meyer1975]。衡量一个部门、一个业务、一个公司、一个行业，乃至一个国家都有一套金字塔式的指标体系，而国家每年发布的统计年鉴就包含一套衡量经济和社会发展情况的指标体系，涵盖人口、土地、生产、消费等等专题，省、市、区县以及自治区、州、县等各级地方统计局每年也会发布一份地方统计年鉴。
+
+
+接下来，本文分四个部分展开介绍地区分布图，分别是单变量情形、多变量情形、本文小结和未来展望。
+
+
+单变量情形中以 **latticeExtra** 包[@latticeExtra]内置的数据集 USCancerRates 为例，以地区分布图形式展示美国 1999-2003 年度各郡的年平均癌症死亡率，此处专题的含义是「人口死亡率」，显而易见，癌症死亡率只是一方面，还有流感死亡率等，癌症可以分类型，如乳腺癌、子宫癌等，人又可以分属性，如性别、年龄、种族等等。在数据操作、指标计算和分面绘图等方面从零开始介绍绘制地区分布图的过程，包括基础数据操作以及六个绘图工具 **maps** 包[@Becker1993]、**latticeExtra** 包、**ggplot2** 包[@Wickham2022]、**tmap** 包[@Tennekes2018]、**sf** 包[@Pebesma2018]和 **mapsf** 包[@mapsf2022]，阐述数据指标「年平均癌症死亡率」的实际含义、指标口径和计算过程，从易到难，层层深入，以期达到出版级的水准，探索出最佳实践。
+
+
+多变量情形中以美国人口调查局发布的调查数据为基础，分析北卡罗来纳州各郡社区普查级的家庭年收入与白人占比的空间相关性。先以单变量的地区分布图描述各个普查区域里家庭年收入的空间分布，接着和二元变量的地区分布图形成对比，展示相关性的空间分布。
+
+
+本文小结部分给出了 7 种不同绘图方案间的关系和一些绘图经验，希望帮助读者加深理解和学习。
+
+
+未来展望部分从应用场景和绘图技术方面继续提供一些示例，供读者继续探索。
+
+
+## 单变量情形
+
+
+### 美国各郡的年平均癌症死亡率分布
+
+下面以 [**latticeExtra** 包](https://latticeextra.r-forge.r-project.org/)[@latticeExtra]内置的 USCancerRates 数据集为例介绍分面，同时展示多个观测指标的空间分布。USCancerRates 数据集来自[美国国家癌症研究所](https://statecancerprofiles.cancer.gov/)（National Cancer Institute，简称 NCI）。根据1999-2003年的5年数据，分男女统计癌症年平均死亡率（单位十万分之一），这其中的癌症数是所有癌症种类之和。癌症死亡率根据2000年美国[标准人口年龄分组](https://seer.cancer.gov/stdpopulations/stdpop.19ages.html)调整，分母人口数量由 NCI 根据普查的人口数调整，即将各年各个年龄段的普查人口数按照 2000 年的**美国标准人口年龄分组**换算。因**latticeExtra** 包没有提供数据集的加工过程，笔者结合 NCI 网站信息，对此数据指标的调整过程略加说明，这里面其实隐含很多的道理。
+
+人口数每年都会变的，为使各年数据指标可比，人口划分就保持一致， @tbl-us-std-pop 展示 1940-2000 年各个年龄段（共19个年龄组）的标准人口数，各个年龄段的普查人口数换算成年龄调整的标准人口数，换算公式为：
+
+$$
+\text{某年龄段标准人口数} = \text{某年龄段普查人口数} / \text{总普查人口数} * 1000000.
+$$
+
+以 2000 年的 10-14 岁年龄段标准人口数为例，即：
+
+$$
+73032 = 20056779 / 274633642 * 1000000.
+$$
+
+
+```{r us-std-pop}
+#| label: tbl-us-std-pop
+#| tbl-cap: "1940-2000 年美国标准人口分组"
+#| echo: false
+us_std_pop <- readRDS(file = "data/us_std_pop.rds")
+# 去掉汇总列
+us_std_pop <- subset(x = us_std_pop, subset = Age != "Total", select = setdiff(colnames(us_std_pop), "2000 U.S. Standard Population (Census P25-1130)"))
+# 继续清理表头
+colnames(us_std_pop) <- gsub(x = colnames(us_std_pop), pattern = "( U.S. Standard Million)", replacement = "", perl = T)
+# 清理 Age 列
+us_std_pop$Age <- gsub(x = us_std_pop$Age, pattern = "( years)", replacement = "", perl = T)
+knitr::kable(us_std_pop)
+```
+
+
+年龄调整的比率（Age-adjusted Rates）的定义详见[NCI 网站](https://seer.cancer.gov/seerstat/tutorials/aarates/definition.html)，它是一个根据年龄调整的加权平均数，权重根据年龄段人口在标准人口中的比例来定，一个包含年龄 $x$ 到年龄 $y$ 的分组，其年龄调整的比率计算公式如下：
+
+$$
+aarate_{x-y} = \sum_{i=x}^{y}\Big[ \big( \frac{count_i}{pop_i} \big)  \times \big( \frac{stdmil_i}{\sum_{j=x}^{y} stdmil_j} \big) \times 100000 \Big]
+$$
+
+一个具体的例子可见[网站](https://seer.cancer.gov/seerstat/tutorials/aarates/step3.html)，篇幅所限，此处仅以2000年举例，一个年龄段 00 years 死亡人数 **29**（可看作婴儿死亡人数），总人数 **139879**，则年龄调整的死亡率：
+
+$$
+aarate_{0-0} = \frac{29}{139879}*\frac{3794901}{274633642}*100000 = 0.2864
+$$
+
+读者可能有疑惑，一系列复杂的调整是为什么？指标稳定性和可比性。稳定不是代表不变，稳定是不轻易受干扰。从各社区、各郡、各州乃至国家，从下往上聚合数据的时候，分年龄、种族、性别等下钻/上卷的时候，有的郡总人口可能相对很少，死亡人数也很少。可比性是指组与组间可比，且随时间变化依然可比，刻画因癌症死亡的相对风险。
+
+
+```{r}
+#| echo: true
+# 加载死亡率数据
+data(USCancerRates, package = "latticeExtra")
+# 查看 Alabama 的 Pickens County 的数据
+subset(x = USCancerRates, subset = state == "Alabama" & county == "Pickens County")
+```
+
+以 Alabama 的 Pickens County 为例，1999-2003年平均年龄调整的男性癌症死亡率为 363.7（单位：十万分之一），在 95% 置信水平下，置信限为 $[311.1, 423.2]$。根据最新的五年数据显示 2014-2018 年男性癌症死亡率为 479.8，95% 置信水平下的置信区间为 $[425.7, 539.3]$。简单验证一下，就会发现有意思的现象，置信区间不是关于观测的癌症死亡率对称，且离置信区间中心尚有距离， $\frac{311.1 + 423.2}{2} = 367.1 \neq 363.7$。一般来说，100000 人中有 363.7 人因癌症死亡，死亡人数较多（比如大于100）的情况下，二项分布可用正态分布逼近，置信区间上下限应该分别为：
+
+```{r}
+#| echo: true
+qnorm(p = 1 - 0.05 / 2)
+# 置信下限
+363.7 - 1.96 * sqrt(363.7 / 100000 * (1 - 363.7 / 100000) / 100000) * 100000
+# 置信上限
+363.7 + 1.96 * sqrt(363.7 / 100000 * (1 - 363.7 / 100000) / 100000) * 100000
+```
+
+而美国国家癌症研究所给的置信带更宽，更保守一些，显然这里面的算法没这么简单。以阿拉巴马州为例，将所有的郡死亡率及其置信区间绘制出来，如 @fig-alabama-ci-rank 所示，整体来说，偏离置信区间中心都很小。
+
+```{r alabama-ci-rank}
+#| label: fig-alabama-ci-rank
+#| fig.cap: "1999-2003 年美国阿拉巴马州各个郡的年平均癌症死亡率"
+#| fig.width: 8
+#| fig.height: 10
+#| fig.align: "center"
+#| fig.showtext: true
+#| echo: false
+us_cancer_rates <- reshape(
+  data = USCancerRates,
+  # 需要转行的列，也可以用列序号代替
+  varying = c(
+    "LCL95.male", "rate.male", "UCL95.male",
+    "LCL95.female", "rate.female", "UCL95.female"
+  ),
+  times = c("男性", "女性"), # 构成新列 sex 的列值
+  v.names = c("LCL95", "rate", "UCL95"), # 列转行 列值构成的新列，指定名称
+  timevar = "sex", # 列转行 列名构成的新列，指定名称
+  idvar = c("state", "county"), # 可识别郡的编码
+  # 原数据有 3041 行，性别字段只有两个取值，转长格式后有 2*3041 行
+  new.row.names = 1:(2 * 3041),
+  direction = "long"
+)
+alabama_us_cancer_rates <- subset(x = us_cancer_rates, subset = state == "Alabama")
+library(ggplot2)
+ggplot(
+  data = alabama_us_cancer_rates,
+  aes(
+    x = rate, xmin = LCL95, xmax = UCL95,
+    y = reorder(county, rate, max), colour = sex
+  )
+) +
+  geom_pointrange() +
+  labs(x = "癌症死亡率", y = "郡", colour = "性别") +
+  theme_minimal()
+```
+
+不难看出，女性癌症死亡率整体上低于男性，且各个地区的死亡率有明显差异。NCI [网站](https://statecancerprofiles.cancer.gov/confidenceintervals.html)仅对置信区间的统计意义给予解释，这跟统计学课本上没有太多差别，没有提供具体的计算过程。可以推断的是必然使用了泊松、伽马一类的偏态分布来刻画死亡人数的分布，疑问尚未解开，欢迎大家讨论。
+
+
+::: {.callout-warning}
+癌症死亡率相关数据仅可用于统计报告和分析，不可用于其他目的，请遵守[相关法律规定](https://statecancerprofiles.cancer.gov/help/data-use.html)。
+:::
+
+
+## 参考文献
+
